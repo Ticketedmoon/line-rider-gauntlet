@@ -1,3 +1,6 @@
 [submodule "ols"]
 	path = modules
 	url = https://github.com/DanielGavin/ols.git
+[submodule "modules/git"]
+	path = modules/git
+	url = https://github.com/DanielGavin/ols.git

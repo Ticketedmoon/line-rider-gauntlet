@@ -1,0 +1,3 @@
+[submodule "ols"]
+    path = modules/git/ols
+    url = https://github.com/DanielGavin/ols.git

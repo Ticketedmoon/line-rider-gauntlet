@@ -109,7 +109,7 @@ main :: proc() {
             append(&lines, line)
         }
 
-        // Spawn the dynamic box when space is pressed
+        // Spawn the dynamic ball when space is pressed
         if !ball_created && rl.IsKeyPressed(.SPACE) {
             box_body_def := b2.DefaultBodyDef()
             box_body_def.type = b2.BodyType.dynamicBody
@@ -120,7 +120,6 @@ main :: proc() {
             box_shape_def.density = 1.0
             box_shape_def.friction = 0.3
             box_shape_def.restitution = 0.3
-            box_vertices := b2.MakeSquare(0.5)
             _ = b2.CreateCircleShape(box_body_id, box_shape_def, circle)
 
             ball_created = true
@@ -158,12 +157,12 @@ main :: proc() {
         // Draw in-progress line
         if drawing_line {
             current := rl.GetMousePosition()
-            rl.DrawLineV(mouse_start, current, rl.GRAY)
+            rl.DrawLineEx(mouse_start, current, 3, rl.GRAY)
         }
 
         // Draw all stored lines
         for line in lines {
-            rl.DrawLineV(line.start, line.end, rl.BLACK)
+            rl.DrawLineEx(line.start, line.end, 3, rl.BLACK)
         }
 
         pos := b2.Body_GetPosition(box_body_id)

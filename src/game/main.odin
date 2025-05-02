@@ -19,7 +19,7 @@ main :: proc() {
 
     // Create Box2D world
     world_def := b2.DefaultWorldDef()
-    world_def.gravity = b2.Vec2{0.0, 9.8}
+    world_def.gravity = b2.Vec2{0.0, 50.0}
     world_id := b2.CreateWorld(world_def)
 
     // Ball body definition (dynamic, at position 400,100 in pixels, converted to meters)
@@ -31,6 +31,7 @@ main :: proc() {
     box_shape_def := b2.DefaultShapeDef()
     box_shape_def.density = 1.0
     box_shape_def.friction = 0.3
+    box_shape_def.restitution = 0.3
 
     box_body_id := b2.CreateBody(world_id, box_body_def)
 
@@ -92,6 +93,7 @@ main :: proc() {
             box_shape_def := b2.DefaultShapeDef()
             box_shape_def.density = 1.0
             box_shape_def.friction = 0.3
+            box_shape_def.restitution = 0.3
             box_vertices := b2.MakeSquare(0.5)
             _ = b2.CreateCircleShape(box_body_id, box_shape_def, circle)
 

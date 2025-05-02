@@ -2,6 +2,7 @@ package game
 
 import b2 "vendor:box2d"
 import rl "vendor:raylib"
+import "core:math"
 
 LineSegment :: struct {
     start: rl.Vector2,
@@ -9,13 +10,23 @@ LineSegment :: struct {
     body_id: b2.BodyId,
 }
 
+Particle :: struct {
+    pos: rl.Vector2,
+    vel: rl.Vector2,
+    color: rl.Color,
+    lifetime: f32,
+}
+
 main :: proc() {
     rl.InitWindow(800, 600, "Multiple Collidable Lines with Mouse")
     defer rl.CloseWindow()
 
     rl.SetTargetFPS(60)
+    rl.InitAudioDevice()
+    defer rl.CloseAudioDevice()
 
-    scale: f32 = 0.125 // 100 pixels = 1 meter
+    goal_sound := rl.LoadSound("assets/sfx/level-completion.mp3")
+    scale: f32 = 0.085 // 100 pixels = 1 meter
 
     // Create Box2D world
     world_def := b2.DefaultWorldDef()
@@ -25,7 +36,7 @@ main :: proc() {
     // Ball body definition (dynamic, at position 400,100 in pixels, converted to meters)
     box_body_def := b2.DefaultBodyDef()
     box_body_def.type = b2.BodyType.dynamicBody
-    box_body_def.position = b2.Vec2{f32(400) * scale, f32(100) * scale}
+    box_body_def.position = b2.Vec2{f32(40) * scale, f32(100) * scale}
 
     // Ball shape definition (density and friction typical for a ball)
     box_shape_def := b2.DefaultShapeDef()
@@ -41,15 +52,23 @@ main :: proc() {
         radius = 0.5,          // Radius in meters
     }
 
+    goal_pos  := rl.Vector2{700, 500} // screen space in pixels
+    goal_size := rl.Vector2{40, 40}
+
     // Line drawing state
     drawing_line := false
     ball_created := false
+    goal_reached := false
     mouse_start := rl.Vector2{}
     mouse_end   := rl.Vector2{}
 
     lines: [dynamic]LineSegment = {}
+    particles: [dynamic]Particle = {}
 
-    for !rl.WindowShouldClose() {
+    frame_counter: i32 = 0
+
+    for !rl.WindowShouldClose() { 
+
         // Handle mouse input
         if rl.IsMouseButtonPressed(.LEFT) {
             mouse_start = rl.GetMousePosition()
@@ -87,7 +106,7 @@ main :: proc() {
         if !ball_created && rl.IsKeyPressed(.SPACE) {
             box_body_def := b2.DefaultBodyDef()
             box_body_def.type = b2.BodyType.dynamicBody
-            box_body_def.position = b2.Vec2{f32(400) * scale, f32(100) * scale}
+            box_body_def.position = b2.Vec2{f32(40) * scale, f32(100) * scale}
             box_body_id = b2.CreateBody(world_id, box_body_def)
 
             box_shape_def := b2.DefaultShapeDef()
@@ -120,10 +139,38 @@ main :: proc() {
             rl.DrawLineV(line.start, line.end, rl.BLACK)
         }
 
-        // Draw falling dynamic box
         pos := b2.Body_GetPosition(box_body_id)
         x := i32(pos.x / scale)
         y := i32(pos.y / scale)
+
+        ball_screen_pos := rl.Vector2{f32(x), f32(y)}
+        in_goal := rl.CheckCollisionPointRec(ball_screen_pos, rl.Rectangle{
+            x = goal_pos.x,
+            y = goal_pos.y,
+            width = goal_size.x,
+            height = goal_size.y,
+        })
+
+        frame_counter += 1
+        pulse_color := (frame_counter / 16) % 2 == 0 ? rl.GREEN : rl.LIME
+        color := in_goal ? rl.GREEN : pulse_color
+
+        rl.DrawRectangleV(goal_pos, goal_size, color)
+        rl.DrawRectangleLinesEx(rl.Rectangle{
+            x = goal_pos.x,
+            y = goal_pos.y,
+            width = goal_size.x,
+            height = goal_size.y,
+        }, 4, rl.DARKGREEN)
+
+        if in_goal && !goal_reached {
+            goal_reached = true
+            rl.PlaySound(goal_sound)
+            rl.DrawText("GOAL!", 350, 50, 40, rl.DARKGREEN)
+            spawn_confetti(&particles, goal_pos, goal_size)
+        }
+
+        update_and_draw_confetti(&particles, (1.0 / 60.0)) // Assuming fixed timestep
 
         rl.DrawCircle(x, y, circle.radius / scale, rl.RED)
         rl.DrawText("Click and drag to draw collidable lines", 10, 10, 20, rl.DARKGRAY)
@@ -131,4 +178,47 @@ main :: proc() {
     }
 
     b2.DestroyWorld(world_id)
+}
+
+spawn_confetti :: proc(particles: ^[dynamic]Particle, 
+    goal_pos: rl.Vector2, 
+    goal_size: rl.Vector2) {
+
+    for i in 0..<20 {
+        pos := rl.Vector2{
+            goal_pos.x + f32(rl.GetRandomValue(0, i32(goal_size.x))),
+            goal_pos.y + f32(rl.GetRandomValue(0, i32(goal_size.y))),
+        }
+        angle := f32(rl.GetRandomValue(0, 360)) * rl.DEG2RAD
+        speed := f32(rl.GetRandomValue(20, 60) / 10.0)
+        vel := rl.Vector2{
+            math.cos(angle) * speed,
+            math.sin(angle) * speed,
+        }
+        color := rl.ColorAlpha(rl.YELLOW, 1.0)
+        _ = append(particles, Particle{pos, vel, color, 1.0})
+    }
+}
+
+update_and_draw_confetti :: proc(particles: ^[dynamic]Particle, dt: f32) {
+    i := 0
+    for i < len(particles^) {
+        p := &particles^[i]
+        p.pos.x += p.vel.x * 60 * dt
+        p.pos.y += p.vel.y * 60 * dt
+        p.lifetime -= dt
+        if p.lifetime <= 0 {
+
+            // Remove by swapping with last and truncating
+            last := len(particles^) - 1
+            if i != last {
+                particles^[i] = particles^[last]
+            }
+
+            resize(particles, last)
+        } else {
+            rl.DrawCircleV(p.pos, 3.0, p.color)
+            i += 1
+        }
+    }
 }

@@ -48,9 +48,9 @@ main :: proc() {
 	world_def := b2.DefaultWorldDef()
 	world_id := b2.CreateWorld(world_def)
 
-	ground_texture := rl.LoadTexture("assets/ground.png")
+	ground_texture := rl.LoadTexture("assets/texture/ground.png")
 	defer rl.UnloadTexture(ground_texture)
-	box_texture := rl.LoadTexture("assets/box.png")
+	box_texture := rl.LoadTexture("assets/texture/box.png")
 	defer rl.UnloadTexture(box_texture)
 
 	tile_polygon := b2.MakeSquare(0.5 * tile_size)

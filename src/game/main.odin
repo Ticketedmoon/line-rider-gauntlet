@@ -41,19 +41,12 @@ main :: proc() {
     box_body_def := b2.DefaultBodyDef()
     box_body_def.type = b2.BodyType.dynamicBody
     box_body_def.position = b2.Vec2{f32(40) * scale, f32(100) * scale}
-
-    // Ball shape definition (density and friction typical for a ball)
-    box_shape_def := b2.DefaultShapeDef()
-    box_shape_def.density = 1.0
-    box_shape_def.friction = 0.3
-    box_shape_def.restitution = 0.3
-
     box_body_id := b2.CreateBody(world_id, box_body_def)
 
     box_vertices := b2.MakeSquare(0.5)
     circle := b2.Circle{
-        center = b2.Vec2{0.0, 0.0}, // Relative to the body's origin
-        radius = 0.5,          // Radius in meters
+        center = b2.Vec2{0.0, 0.0},
+        radius = 0.5,
     }
 
     goal_pos := rl.Vector2{f32(WINDOW_WIDTH - 100), f32(WINDOW_HEIGHT - 100)}

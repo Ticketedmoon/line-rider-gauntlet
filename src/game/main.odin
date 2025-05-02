@@ -1,130 +1,132 @@
 package game
 
-import "core:fmt"
-import "core:math/rand"
-
+import b2 "vendor:box2d"
 import rl "vendor:raylib"
 
-@(private="file")
-backgroundColour: rl.Color = rl.ORANGE
-@(private="file")
-playerSize :: rl.Vector2{64, 64}
-@(private="file")
-playerColour: rl.Color = rl.BLUE
-@(private="file")
-playerPos := rl.Vector2{320, 320}
-@(private="file")
-lines: [dynamic][dynamic]rl.Vector2
-@(private="file")
-currentlinePolygonsBuffer: [dynamic]rl.Vector2
+LineSegment :: struct {
+    start: rl.Vector2,
+    end: rl.Vector2,
+    body_id: b2.BodyId,
+}
 
 main :: proc() {
+    rl.InitWindow(800, 600, "Multiple Collidable Lines with Mouse")
+    defer rl.CloseWindow()
 
-    //rl.SetConfigFlags(rl.FLAG_WINDOW_RESIZABLE | rl.FLAG_VSYNC_HINT)
-    rl.SetTraceLogLevel(rl.TraceLogLevel.WARNING)
-    rl.InitWindow(1280, 720, "Skybreak/Line-Rider-Gauntlet")
     rl.SetTargetFPS(60)
 
+    scale: f32 = 0.125 // 100 pixels = 1 meter
+
+    // Create Box2D world
+    world_def := b2.DefaultWorldDef()
+    world_def.gravity = b2.Vec2{0.0, 9.8}
+    world_id := b2.CreateWorld(world_def)
+
+    // Ball body definition (dynamic, at position 400,100 in pixels, converted to meters)
+    box_body_def := b2.DefaultBodyDef()
+    box_body_def.type = b2.BodyType.dynamicBody
+    box_body_def.position = b2.Vec2{f32(400) * scale, f32(100) * scale}
+
+    // Ball shape definition (density and friction typical for a ball)
+    box_shape_def := b2.DefaultShapeDef()
+    box_shape_def.density = 1.0
+    box_shape_def.friction = 0.3
+
+    box_body_id := b2.CreateBody(world_id, box_body_def)
+
+    box_vertices := b2.MakeSquare(0.5)
+    circle := b2.Circle{
+        center = b2.Vec2{0.0, 0.0}, // Relative to the body's origin
+        radius = 0.5,          // Radius in meters
+    }
+
+    // Line drawing state
+    drawing_line := false
+    ball_created := false
+    mouse_start := rl.Vector2{}
+    mouse_end   := rl.Vector2{}
+
+    lines: [dynamic]LineSegment = {}
+
     for !rl.WindowShouldClose() {
-        update()
-        render()
-    }
-
-    rl.CloseWindow()
-}
-
-update :: proc() {
-
-    old_player_pos := playerPos
-    checkForKeyPress()
-    checkForMouseInput()
-    checkForCollision(old_player_pos)
-}
-
-render :: proc() {
-    rl.BeginDrawing()
-    rl.ClearBackground(backgroundColour)
-    rl.DrawRectangleV(playerPos, playerSize, playerColour)
-    rl.DrawRectangleV({960,320}, {64, 64}, rl.GREEN)
-
-    // Render current line polygon buffer temporarily
-    if len(currentlinePolygonsBuffer) > 0 {
-        for i in 0..<len(currentlinePolygonsBuffer) - 1 {
-            rl.DrawLineEx(currentlinePolygonsBuffer[i], currentlinePolygonsBuffer[i + 1], 12, rl.RED)
+        // Handle mouse input
+        if rl.IsMouseButtonPressed(.LEFT) {
+            mouse_start = rl.GetMousePosition()
+            drawing_line = true
         }
-    }
+        if rl.IsMouseButtonReleased(.LEFT) && drawing_line {
+            mouse_end = rl.GetMousePosition()
+            drawing_line = false
 
-    if len(lines) > 0 {
-        for i in 0..<len(lines) {
-            line := lines[i]
-            for j in 0..<len(line) - 1 {
-                rl.DrawLineEx(line[j], line[j + 1], 12, rl.BLUE)
+            // Convert to Box2D world coordinates
+            start_world := b2.Vec2{f32(mouse_start.x) * scale, f32(mouse_start.y) * scale}
+            end_world   := b2.Vec2{f32(mouse_end.x) * scale, f32(mouse_end.y) * scale}
+
+            // Create static edge body
+            edge_body_def := b2.DefaultBodyDef()
+            edge_body_def.type = b2.BodyType.staticBody
+            edge_body_def.position = b2.Vec2{0.0, 0.0}
+            edge_body_id := b2.CreateBody(world_id, edge_body_def)
+
+            edge_shape_def := b2.DefaultShapeDef()
+            edge_shape_def.friction = 0.6
+            segment := b2.Segment{start_world, end_world}
+            _ = b2.CreateSegmentShape(edge_body_id, edge_shape_def, segment)
+
+            // Store line segment
+            line := LineSegment{
+                start = mouse_start,
+                end   = mouse_end,
+                body_id = edge_body_id,
             }
+            append(&lines, line)
         }
-    }
 
-    rl.EndDrawing();
-}
+        // Spawn the dynamic box when space is pressed
+        if !ball_created && rl.IsKeyPressed(.SPACE) {
+            box_body_def := b2.DefaultBodyDef()
+            box_body_def.type = b2.BodyType.dynamicBody
+            box_body_def.position = b2.Vec2{f32(400) * scale, f32(100) * scale}
+            box_body_id = b2.CreateBody(world_id, box_body_def)
 
-checkForMouseInput :: proc() {
+            box_shape_def := b2.DefaultShapeDef()
+            box_shape_def.density = 1.0
+            box_shape_def.friction = 0.3
+            box_vertices := b2.MakeSquare(0.5)
+            _ = b2.CreateCircleShape(box_body_id, box_shape_def, circle)
 
-    if rl.IsMouseButtonReleased(.LEFT) {
-        fmt.printf("rel: %d\n", len(currentlinePolygonsBuffer))
-        // If there are vertices/polygons in the temporary line buffer
-        // commit them to in-memory store
-        // wipe current line buffer
-
-        if len(currentlinePolygonsBuffer) > 1 {
-            append(&lines, currentlinePolygonsBuffer)
-            currentlinePolygonsBuffer = [dynamic]rl.Vector2{}
+            ball_created = true
         }
-        return;
-    }
 
-    if rl.IsMouseButtonDown(.LEFT) {
-        mPos: rl.Vector2 = rl.GetMousePosition()
-        colour: rl.Color = rl.Color{0, 0, 0, 255}
+        if ball_created {
+            // Step the physics world
+            b2.World_Step(world_id, 1.0 / 60.0, 6)
 
-        polygonPos := rl.Vector2{mPos.x, mPos.y}
-        append(&currentlinePolygonsBuffer, polygonPos)
-        return;
-    }
-
-}
-
-checkForKeyPress :: proc() {
-    if rl.IsKeyPressed(.H) {
-        backgroundColour = rl.Color{
-            cast(u8) (rand.float32()*255),
-            cast(u8) (rand.float32()*255),
-            cast(u8) (rand.float32()*255),
-            255
         }
+
+        rl.BeginDrawing()
+        rl.ClearBackground(rl.RAYWHITE)
+
+        // Draw in-progress line
+        if drawing_line {
+            current := rl.GetMousePosition()
+            rl.DrawLineV(mouse_start, current, rl.GRAY)
+        }
+
+        // Draw all stored lines
+        for line in lines {
+            rl.DrawLineV(line.start, line.end, rl.BLACK)
+        }
+
+        // Draw falling dynamic box
+        pos := b2.Body_GetPosition(box_body_id)
+        x := i32(pos.x / scale)
+        y := i32(pos.y / scale)
+
+        rl.DrawCircle(x, y, circle.radius / scale, rl.RED)
+        rl.DrawText("Click and drag to draw collidable lines", 10, 10, 20, rl.DARKGRAY)
+        rl.EndDrawing()
     }
 
-    if rl.IsKeyDown(.UP) {
-        playerPos.y -= 400 * rl.GetFrameTime()
-    }
-    if rl.IsKeyDown(.DOWN) {
-        playerPos.y += 400 * rl.GetFrameTime()
-    }
-    if rl.IsKeyDown(.LEFT) {
-        playerPos.x -= 400 * rl.GetFrameTime()
-    }
-    if rl.IsKeyDown(.RIGHT) {
-        playerPos.x += 400 * rl.GetFrameTime()
-    }
-}
-
-checkForCollision :: proc(old_player_pos: rl.Vector2) {
-    player_rect := rl.Rectangle{playerPos.x, playerPos.y, playerSize.x, playerSize.y}
-    other_rect := rl.Rectangle{960, 320, 64, 64}
-
-    if rl.CheckCollisionRecs(player_rect, other_rect) {
-        playerColour = rl.RED
-        playerPos = old_player_pos
-        return
-    } 
-    
-    playerColour = rl.BLUE
+    b2.DestroyWorld(world_id)
 }

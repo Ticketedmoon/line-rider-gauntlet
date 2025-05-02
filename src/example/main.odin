@@ -71,7 +71,7 @@ main :: proc() {
 
 	for &entity, i in box_entities {
 		body_def := b2.DefaultBodyDef()
-		body_def.type = .dynamicBody
+		body_def.type = b2.BodyType.dynamicBody
 		body_def.position = {0.5 * tile_size * f32(i), -4.0 + tile_size * f32(i)}
 		entity.body_id = b2.CreateBody(world_id, body_def)
 		entity.texture = box_texture
